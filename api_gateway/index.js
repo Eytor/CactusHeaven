@@ -49,8 +49,8 @@ const configureMessageBroker = channel => {
         const { body } = req;
         const bodyJson = JSON.stringify(body);
         channel.publish(order, createOrder, new Buffer(bodyJson));
-
-        res.status(200).json(body);
+        console.log("[x] Sending message " + bodyJson)
+        res.status(200).json();
     });
 
     app.listen(PORT, () => console.log(`Listening on http://localhost:${PORT}`));
