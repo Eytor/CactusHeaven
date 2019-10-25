@@ -44,13 +44,12 @@ const configureMessageBroker = channel => {
 
     app.use(bodyParser.json());
 
-    // TODO: Setup route
-    app.post('/api/orders', function(req, res) {
+    app.post('/api/orders', (req, res) => {
         const { body } = req;
         const bodyJson = JSON.stringify(body);
         channel.publish(order, createOrder, new Buffer(bodyJson));
-        console.log("[x] Sending message " + bodyJson)
-        res.status(200).json();
+        console.log('[x] sending request to email notifications');
+        return res.send();
     });
 
     app.listen(PORT, () => console.log(`Listening on http://localhost:${PORT}`));
