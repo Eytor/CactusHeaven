@@ -13,29 +13,32 @@ const messageConnection = () => new Promise((resolve, reject) =>
 const createChannel = connection => new Promise((resolve, reject) =>
     connection.createChannel((err, channel) => err ? reject(err) : resolve(channel)));
 
-//const createIntoDB = data => {
-//    let order = new Order({
-//        orderDate: new Date()
-//    });
-//    order.save((error, newOrder) => {
-//            const { items } = data;
-//            if(items && Array.isArray(items)) {
-//            for (let i = 0; i < items.length; i++) {
-//                OrderItem.create({
-//                    description: items[i].description,
-//                    unitPrice: items[i].unitPrice,
-//                    quantity: items[i].quantity,
-//                    rowPrice: items[i].quantity * items[i].unitPrice,
-//                    orderId: newOrder._id
-//                }, error => {
-//                }
-//                );
-//            }
-//            }
-//            else console.log('Failiure');
-//        }
-//    );
-//}
+const createIntoDB = data => {
+let order = new Order({
+    customerEmail: data.email,
+    totalPrice: data.items.reduce((prev, curr) => prev + (curr.quantity * curr.unitPrice), 0),
+    orderDate: new Date()
+});
+order.save((error, newOrder) => {
+        const { items } = data;
+        if (items && Array.isArray(items)) {
+            for (let i = 0; i < items.length; i++) {
+                OrderItem.create({
+                    description: items[i].description,
+                    quantity: items[i].quantity,
+                    unitPrice: items[i].unitPrice,
+                    rowPrice: items[i].quantity * items[i].unitPrice,
+                    orderId: newOrder._id
+                }, error => {
+                    if (error) console.log(`[x] Failed`);
+                    else console.log(`Success`)
+                }
+                );
+            }
+        } else console.log('Failiure');
+    
+});
+}
 
 (async () => {
     console.log(`We are here order service`);
