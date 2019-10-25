@@ -1,53 +1,79 @@
-const amqp = require('amqplib/callback_api');
 const { Order, OrderItem } = require('./data/db');
 
-const messageInfo = {
-    exchanges: { order: 'order_exchange' },
-    queues: { orderQueue: 'order_queue' },
-    routingKeys: { createOrder: 'create_order' }
+const amqp = require('amqplib/callback_api');
+
+const messageBrokerInfo = {
+    exchanges: {
+        order: 'order_exchange'
+    },
+    routingKeys: {
+        createOrder: 'create_order'
+    },
+    queues: { 
+        orderQueue: 'order_queue' 
+    }
 }
 
-const messageConnection = () => new Promise((resolve, reject) =>
-    amqp.connect('amqp://localhost', (err, conn) => err ? reject(err) : resolve(conn)));
-
-const createChannel = connection => new Promise((resolve, reject) =>
-    connection.createChannel((err, channel) => err ? reject(err) : resolve(channel)));
-
-const createIntoDB = data => {
-let order = new Order({
-    customerEmail: data.email,
-    totalPrice: data.items.reduce((prev, curr) => prev + (curr.quantity * curr.unitPrice), 0),
-    orderDate: new Date()
+const createMessageBrokerConnection = () => new Promise((resolve, reject) => {
+    amqp.connect('amqp://localhost', (err, conn) => {
+        if (err) { reject(err); }
+        resolve(conn);
+    });
 });
-order.save((error, newOrder) => {
-        const { items } = data;
-        if (items && Array.isArray(items)) {
-            for (let i = 0; i < items.length; i++) {
-                OrderItem.create({
-                    description: items[i].description,
-                    quantity: items[i].quantity,
-                    unitPrice: items[i].unitPrice,
-                    rowPrice: items[i].quantity * items[i].unitPrice,
-                    orderId: newOrder._id
-                }, error => {
-                    if (error) console.log(`[x] Failed`);
-                    else console.log(`Success`)
-                }
-                );
+
+const createChannel = connection => new Promise((resolve, reject) => {
+    connection.createChannel((err, channel) => {
+        if (err) { reject(err); }
+        resolve(channel);
+    });
+});
+
+const configureMessageBroker = channel => {
+    const { order } = messageBrokerInfo.exchanges;
+    const { orderQueue } = messageBrokerInfo.queues;
+    const { createOrder } = messageBrokerInfo.routingKeys;
+    channel.assertExchange(order, 'direct', {durable: true});
+    channel.assertQueue(orderQueue, { durable: false }); // Getur bara verið false af einhverri ástæðu???
+    channel.bindQueue(orderQueue, order, createOrder);
+};
+
+const doTheThing = (data) => {
+    var email = data.email;
+    var totalPrice = 0;
+    items = data.items;
+    for(var index in items) {
+        var item = items[index];
+        item.rowPrice = item.unitPrice * item.quantity;
+        totalPrice += item.rowPrice;
+    }
+    var newOrder = {customerEmail:email, totalPrice:totalPrice, orderDate:new Date() };
+    Order.create(newOrder, function(err, result){
+        if(err) console.log(err);
+        else {
+            for(var index in items) {
+                var item = items[index];
+                item.orderId = result._id;
+                OrderItem.create(item, function(err, result){
+                    if(err) console.log(err);
+                    else console.log("New order item made: " + result);
+                });
             }
-        } else console.log('Failiure');
-    
-});
-}
+        }
+    })
+};
 
 (async () => {
-    console.log(`We are here order service`);
     const messageBrokerConnection = await createMessageBrokerConnection();
     const channel = await createChannel(messageBrokerConnection);
-    configureMessageBroker(channel);
-    const { addQueue } = messageBrokerInfo.queues;
-    channel.consume(addQueue, data => {
-        const dataJson = JSON.parse(data.content.toString());
-    }, { noAck: true });
 
+    configureMessageBroker(channel);
+
+    const { order } = messageBrokerInfo.exchanges;
+    const { orderQueue } = messageBrokerInfo.queues;
+    const { createOrder } = messageBrokerInfo.routingKeys;
+    channel.consume(orderQueue, data => {
+        const dataJson = JSON.parse(data.content.toString());
+        const result = doTheThing(dataJson);
+        
+    });
 })().catch(e => console.error(e));
